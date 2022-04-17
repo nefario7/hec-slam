@@ -13,6 +13,23 @@ Control Inputs : (x, y, z) in global frame
 """
 
 
+class History:
+    def __init__(self, X_pre, P_pre, measurements):
+        self.predictions = {}
+        self.measurements = {}
+
+        self.predictions["State"] = X_pre
+        self.predictions["P"] = P_pre
+        for i, data in enumerate(measurements):
+            self.measurements["Marker {}".format(i)] = data
+
+    def show_history(self):
+        print("Predictions:")
+        print(self.predictions)
+        print("Measurements:")
+        print(self.measurements)
+
+
 class HEC_SLAM_EKF:
     def __init__(self, sd, num_markers):
         self.k = num_markers
@@ -24,13 +41,12 @@ class HEC_SLAM_EKF:
         self.pose = np.zeros((6, 1))  # x, y, z, phi, theta, psi
         self.pose_covariance = np.diag(sd["pose"].values())  # 6x6
 
-    def initialize_markers(self, measurement, pose):
-        """Initialize the Landmark positions and covariances
+        self.X = None  # State (6 + 3 * k)x1
+        self.P = None  # Covariance (6 + 3 * k)x(6 + 3 * k)
+        self.X_predicted = None  # Predicted State (6 + 3 * k)x1
+        self.P_predicted = None  # Predicted Covariance (6 + 3 * k)x(6 + 3 * k)
 
-        Args:
-            measurement (_type_): Measurement of the markers
-            pose (_type_): Iinitial pose of the robot
-        """
+    def initialize_markers(self, measurement, pose):
         M = 3 * self.k
 
         # TODO Initialize Landmark using measurement and pose
@@ -41,15 +57,6 @@ class HEC_SLAM_EKF:
         self.P = np.block([[self.pose_covariance, np.zeros((6, M))], [np.zeros((M, 6)), self.landmark_covariance]])
 
     def get_kalman_gain(self, P_pre, H):
-        """_summary_
-
-        Args:
-            P_pre (_type_): _description_
-            H (_type_): _description_
-
-        Returns:
-            K (_type_): Kalman Gain
-        """
         meas = np.linalg.inv(H @ P_pre @ H.T + self.marker_covariance)
         K = P_pre @ H.T @ meas
         return K
@@ -58,32 +65,32 @@ class HEC_SLAM_EKF:
         M = 3 * self.k
         self.X_predicted = np.zeros_like(self.X)
         self.P_predicted = np.zeros_like(self.P)
+        F = np.hstack((np.eye(6), np.zeros(6, M)))
 
-        mapping = np.hstack((np.eye(6), np.zeros(6, M)))
+        # ? Predicted State
+        x_prime, y_prime, z_prime = new_control_input[0:3]
+        phi_prime, theta_prime, psi_prime = new_control_input[3:6]
+        g = np.array([x_prime, y_prime, z_prime, phi_prime, theta_prime, psi_prime])  # Non-linear function
+        self.X_predicted = self.X + F.T @ g
 
-        # ? Predicted State - g(u, (x, y, theta)(t-1))
-        g = np.array([d * np.cos(theta), d * np.sin(theta), alpha])  # Non-linear function
+        # ? Predicted Covariance
+        J = np.identity(6)
+        J = np.identity(6 + M) + F.T @ J @ F
+        self.P_predicted = J @ self.P @ J.T + F.T @ self.control_covariance @ F
 
-        X_pre = X + F.T @ g
-        X_pre[2] = warp2pi(X_pre[2])
-
-        # ? Jacobian - G
-        J = np.zeros((3, 3))
-        J[0, 2] = -d * np.sin(theta)
-        J[1, 2] = d * np.cos(theta)
-        G = np.identity(3 + 2 * k) + F.T @ J @ F
-
-        P_predicted = G @ P @ G.T + mapping.T @ self.control_covariance @ mapping
+        return self.X_predicted, self.P_predicted
 
     def update(self, new_measurement):
-        beta = new_measurement[::3]
-        gamma = new_measurement[1::3]
-        r = new_measurement[2::3]
+        ids = list(new_measurement.keys())
+        positions = np.array(list(new_measurement.values()))
+        lx = positions[:, 0]
+        ly = positions[:, 1]
+        lz = positions[:, 2]
 
-        for i in range(self.k):
-            print("Processing Marker {}".format(i))
+        for i, marker in enumerate(ids):
+            print("Processing Marker {}".format(marker))
 
             # X_pre with x, y, z, phi, theta, psi of robot
             # TODO Write the mesurement error
             # TODO Calculate updated state and covariance
-        return P
+        return X, P

@@ -26,14 +26,17 @@ if __name__ == "__main__":
         deviations = json.load(f)
 
     ekf = HEC_SLAM_EKF(deviations, params.num_markers)
+    ekf.initialize_markers()  # ? How to initialize the EKF?
 
-    # ? How to initialize the EKF?
-    ekf.initialize_markers()
+    pipe, profile = setup_realsense()
+
+    ekf_history = {}
 
     while True:
-        measurement = get_sensor_data()
+        measurements = get_measurement(pipe, profile)
 
-        # if measurement = control:
-        self._predict()
-        # elif measurement = marker:
-        self._update()
+        predictions = ekf.predict()
+        updates = ekf.update(measurements)
+
+        display_data(predictions, updates, measurement)
+        ekf_history["{}".format(time.time())] = History(predictions, updates, measurement)
