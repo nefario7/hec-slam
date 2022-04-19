@@ -40,3 +40,9 @@ if __name__ == "__main__":
 
         display_data(predictions, updates, measurement)
         ekf_history["{}".format(time.time())] = History(predictions, updates, measurement)
+
+        localized_camera = updates[0][:6]
+
+    print("EKF SLAM Complete!")
+
+    # TODO: Find Transformation Matrix from End Effector to Camera (Solve AX = Y)
