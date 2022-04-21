@@ -83,14 +83,31 @@ class HEC_SLAM_EKF:
     def update(self, new_measurement):
         ids = list(new_measurement.keys())
         positions = np.array(list(new_measurement.values()))
-        lx = positions[:, 0]
-        ly = positions[:, 1]
-        lz = positions[:, 2]
 
         for i, marker in enumerate(ids):
             print("Processing Marker {}".format(marker))
 
             # X_pre with x, y, z, phi, theta, psi of robot
-            # TODO Write the mesurement error
-            # TODO Calculate updated state and covariance
-        return X, P
+            x_camera, y_camera, z_camera, phi, theta, psi = self.X_predicted[0:6]
+            # Write the mesurement error
+            measure_pre = self.X_predicted[(6+3*i):(9+3*i)]
+            measure_tru = positions[(3*i):(3+3*i)]
+            measure_error = measure_tru - measure_pre
+
+            # Jacobian
+            H_p = np.identity(6)    # 6 x 6
+            H_l = np.vstack((np.identity(3), np.zeros((3, 3)))) # 6 x 3
+            H_low = np.hstack((H_p, H_l)) # 6 x 9
+            
+            # Mapping matrix
+            F = np.zeros((H_low.shape[1], 6 + positions.size))
+            F[:6, :6] = np.identity(6)
+            F[6:, (3*i+6):(3*i+9)] = np.identity(3)
+            H = H_low @ F
+
+            # Update state and covariances
+            K = self.get_kalman_gain(self.P_predicted, H)
+            self.X_predicted = K @ measure_error + self.X_predicted
+            self.P_predicted = (np.identity(6 + positions.size) - K @ H) @ self.P_predicted
+
+        return self.X_predicted, self.P_predicted
