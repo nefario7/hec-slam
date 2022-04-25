@@ -64,8 +64,9 @@ if __name__ == "__main__":
                 localized_camera[0][0], localized_camera[1][0], localized_camera[2][0]
             )
         )
-        ax.scatter3D(final_waypoint[0], final_waypoint[1], final_waypoint[2], c="#17becf", marker="D")
-        ax.scatter3D(localized_camera[0], localized_camera[1], localized_camera[2], c="g", marker="o")
+        ax.scatter3D(final_waypoint[0], final_waypoint[1], final_waypoint[2], c="#17becf", marker="D", label="Final Waypoint")
+        ax.scatter3D(localized_camera[0], localized_camera[1], localized_camera[2], c="g", marker="o", label="Localization")
+        plt.legend(loc="upper right")
         plt.show()
     else:
         deviations = data

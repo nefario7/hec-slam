@@ -53,13 +53,13 @@ class HEC_SLAM_EKF:
 
         # TODO Initialize Landmark using measurement and pose)
         self.landmark = np.array([init_measurement[i] for i in self.landmark_ids]).reshape(-1, 1)  # (x, y, z) * num_markers x 1
-        print("Before", self.landmark)
+        # print("Before", self.landmark)
         self.landmark_covariance = np.zeros((M, M))
 
         self.landmark[::3] = init_pose[0] - self.landmark[::3]
         self.landmark[1::3] = init_pose[1] - self.landmark[2::3]
         self.landmark[2::3] = init_pose[2] + self.landmark[1::3]
-        print("After", self.landmark)
+        # print("After", self.landmark)
 
         self.pose = np.array(init_pose).reshape(-1, 1)  # (x, y, z, phi, theta, psi) x 1
 
