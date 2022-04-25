@@ -242,6 +242,7 @@ def update(X_pre, P_pre, measure, measure_cov, k):
         F[:3, :3] = np.identity(3)
         F[3:, 2 * i + 3 : 2 * i + 5] = np.identity(2)
         H = H_low @ F
+        print(H.shape)
 
         # * Kalman Gain
         K = P_pre @ H.T @ np.linalg.inv(H @ P_pre @ H.T + measure_cov)
