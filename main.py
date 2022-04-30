@@ -26,6 +26,7 @@ if __name__ == "__main__":
         data = read_data(params.data, show_data=False)
 
     if isinstance(data, tuple):
+        # * Offline Localization
         waypoints, measurements, deviations = data
 
         ekf = HEC_SLAM_EKF(deviations, num_markers=6, landmarks=[1, 2, 3, 9, 10, 12])
@@ -60,15 +61,17 @@ if __name__ == "__main__":
             if i == params.num_waypoints:
                 print("Final Waypoint: \tx: {}, y: {}, z: {}".format(final_waypoint[0], final_waypoint[1], final_waypoint[2]))
         print(
-            "Localization: \t\tx: {:.2f}, y: {:.2f}, z: {:.2f}".format(
-                localized_camera[0][0], localized_camera[1][0], localized_camera[2][0]
-            )
+            "Localization: \t\tx:{:.2f}, y:{:.2f}, z:{:.2f}".format(localized_camera[0][0], localized_camera[1][0], localized_camera[2][0])
         )
+
+        # * Plot Data
         ax.scatter3D(final_waypoint[0], final_waypoint[1], final_waypoint[2], c="#17becf", marker="D", label="Final Waypoint")
         ax.scatter3D(localized_camera[0], localized_camera[1], localized_camera[2], c="g", marker="o", label="Localization")
         plt.legend(loc="upper right")
         plt.show()
+
     else:
+        # * Online Localization
         deviations = data
 
         ekf = HEC_SLAM_EKF(deviations, params.num_waypoints)
