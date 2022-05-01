@@ -1,0 +1,7 @@
+Landmark 1 using 1 values: x : -12.79, y : 12.2, z : 54.0
+Landmark 2 using 1 values: x : -30.75, y : 11.22, z : 58.4
+Landmark 3 using 1 values: x : -10.56, y : -10.65, z :49.5
+Landmark 9 using 1 values: x : 21.0, y : 14.36, z : 50.2
+Landmark 10 using 1 values: x : 5.45, y : 12.92, z : 51.8
+Landmark 11 using 1 values: x : 22.05, y : -7.15, z : 46.1
+Landmark 12 using 1 values: x : 7.01, y : -8.77, z : 47.7
