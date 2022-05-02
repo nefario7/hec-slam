@@ -49,6 +49,26 @@ class HEC_SLAM_EKF:
         self.X_predicted = None  # Predicted State (6 + 3 * k)x1
         self.P_predicted = None  # Predicted Covariance (6 + 3 * k)x(6 + 3 * k)
 
+    def rotate_point(self, orientation, point):
+        phi, theta, psi = orientation
+        s1 = np.sin(phi)
+        c1 = np.cos(phi)
+        s2 = np.sin(theta)
+        c2 = np.cos(theta)
+        s3 = np.sin(psi)
+        c3 = np.sin(psi)
+        R = np.zeros((3, 3))
+        R[0, 0] = c1 * c2
+        R[0, 1] = c1 * s2 * s3 - c3 * s1
+        R[0, 2] = s1 * s3 + c1 * c3 * s2
+        R[1, 0] = c2 * s1
+        R[1, 1] = c1 * c3 + s1 * s2 * s3
+        R[1, 2] = c3 * s1 * s2 - c1 * s3
+        R[2, 0] = -s2
+        R[2, 1] = c2 * s3
+        R[2, 2] = c2 * c3
+        return R @ point
+
     def initialize_markers(self, init_measurement, init_pose):
         M = 3 * self.k
 
@@ -56,9 +76,9 @@ class HEC_SLAM_EKF:
         self.landmark = np.array([init_measurement[i] for i in self.landmark_ids]).reshape(-1, 1)  # (x, y, z) * num_markers x 1
         self.landmark_covariance = np.zeros((M, M))
 
-        self.landmark[::3] = init_pose[0] - self.landmark[::3]
-        self.landmark[1::3] = init_pose[1] - self.landmark[2::3]
-        self.landmark[2::3] = init_pose[2] + self.landmark[1::3]
+        orientation = init_pose[3:6]
+        x_y_z = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
+        self.landmark = ((init_pose[0:3] + x_y_z @ (self.rotate_point(orientation, self.landmark.reshape(3, -1)))).T).flatten()
 
         self.pose = np.array(init_pose).reshape(-1, 1)  # (x, y, z, phi, theta, psi) x 1
 
@@ -78,9 +98,14 @@ class HEC_SLAM_EKF:
         F = np.hstack((np.eye(6), np.zeros((6, M))))
 
         # * Predicted State
+        '''
         x_prime, y_prime, z_prime = new_control_input[0:3]
         phi_prime, theta_prime, psi_prime = new_control_input[3:6]
         g = np.array([x_prime, y_prime, z_prime, phi_prime, theta_prime, psi_prime]).reshape(-1, 1)  # Non-linear function
+        '''
+        x_y_z = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
+        g_xyz = x_y_z @ (self.rotate_point((self.X_predicted[3:6]), new_control_input[0:3]))
+        g = np.hstack((g_xyz, new_control_input[3:6]))
         self.X_predicted = self.X + F.T @ g
 
         # * Predicted Covariance
@@ -90,31 +115,50 @@ class HEC_SLAM_EKF:
 
         return self.X_predicted, self.P_predicted
 
-    def update(self, waypoint, new_measurement):
+    def update(self, new_control_input, new_measurement):
         measurements = {i: new_measurement[i] for i in self.landmark_ids}
         positions = np.array(list(measurements.values()))
 
         for i, (marker, position) in enumerate(measurements.items()):
             print("Processing Marker {}".format(marker))
 
-            # * X_pre with x, y, z, phi, theta, psi of robot
-            x_camera, y_camera, z_camera, phi, theta, psi = self.X_predicted[0:6]
+            phi, theta, psi = self.X_predicted[3:6]
+            x, y, z = new_control_input[0:3] # orientation ignored as not needed in Jacobian
             measure_pre = self.X_predicted[(6 + 3 * i) : (9 + 3 * i)].reshape(-1, 1)
 
-            position[0] = x_camera - position[0]
-            position[1] = y_camera - position[2]
-            position[2] = z_camera + position[1]
+            orientation = self.X_predicted[3:6]
+            x_y_z = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
+            position = (self.X_predicted[0:3] + x_y_z @ (self.rotate_point(orientation, position))).flatten()
             measure_tru = np.array(position).reshape(-1, 1)
             measure_error = measure_tru - measure_pre
             # print(measure_pre, measure_tru)
             # print(measure_error)
 
+            s1 = np.sin(phi)
+            c1 = np.cos(phi)
+            s2 = np.sin(theta)
+            c2 = np.cos(theta)
+            s3 = np.sin(psi)
+            c3 = np.sin(psi)
+
             # * Jacobian
-            # H_p = np.identity(6)  # 6 x 6
-            # H_l = np.vstack((np.identity(3), np.zeros((3, 3))))  # 6 x 3
-            H_p = np.hstack((np.eye(3), np.zeros((3, 3))))  # 3 x 6
+            # H_p = np.hstack((np.eye(3), np.zeros((3, 3))))  # 3 x 6
             # H_l = np.eye(3)
-            H_l = np.array([[-1, 0, 0], [0, 0, -1], [0, 1, 0]])
+            x_y_z = np.array([[-1, 0, 0], [0, 0, -1], [0, 1, 0]])
+            H_p_xyz = np.eye(3)
+            H_p_o = np.zeros((3, 3))
+            H_p_o[0, 0] = -s1*c2*x + (-s1*s2*s3-c3*c1)*y + (c1*s3-s1*c3*s2)*z
+            H_p_o[0, 1] = -c1*s2*x + (c1*c2*s3)*y + c1*c3*c2*z
+            H_p_o[0, 2] = c2*y + c2*z
+            H_p_o[1, 0] = c2*c1*x + (-s1*c3+c1*s2*s3)*y + (c3*c1*s2+s1*s3)*z
+            H_p_o[1, 1] = -s2*s1*x + s1*c2*s3*y + c3*s1*c2*z
+            H_p_o[1, 2] = (-c1*s3+s1*s2*c3)*y + (-s3*s1*s2-c1*c3)*z
+            H_p_o[2, 0] = 0
+            H_p_o[2, 1] = -c2*x - s2*s3*y -s2*c3*z
+            H_p_o[2, 2] = c2*c3*y - c2*s3*z
+            H_p_o = x_y_z @ H_p_o
+            H_p = np.hstack((H_p_xyz, H_p_o))
+            H_l = x_y_z
             H_low = np.hstack((H_p, H_l))  # 3 x 9
 
             # * Mapping matrix
